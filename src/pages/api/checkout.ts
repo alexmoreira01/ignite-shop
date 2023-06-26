@@ -1,9 +1,12 @@
 import { NextApiRequest, NextApiResponse } from "next";
 import { stripe } from "../../lib/stripe";
+import { IProduct } from "../../contexts/CartContext";
 
 export default async function handler(request: NextApiRequest, response: NextApiResponse) {
   // Next não faz divergencias entre GET POST DELETE -- Ele aceita todos os casos
-  const { priceId } = request.body;
+
+  // const { priceId } = request.body; // Antes
+  const { products } = request.body as { products: IProduct[] };
 
   // Evitar o metodo errado
   if (request.method != "POST") {
@@ -11,28 +14,36 @@ export default async function handler(request: NextApiRequest, response: NextApi
 
   }
 
-  if(!priceId) {
-    return response.status(400).json({ error: "Price not found." });
+  // if(!priceId) {
+    // return response.status(400).json({ error: "Price not found." });
+  // }
+  if(!products) {
+    return response.status(400).json({ error: "Products not found." });
   }
 
   const succesUrl = `${process.env.NEXT_URL}/success?session_id={CHECKOUT_SESSION_ID}`;
   const cancelUrl = `${process.env.NEXT_URL}/`;
 
   const checkoutSession = await stripe.checkout.sessions.create({
-    success_url: succesUrl, // Urls de sucesso e de cancelamento -- redirecionar caso tenha sucesso ou erro
+    success_url: succesUrl,
     cancel_url: cancelUrl,
-    mode: 'payment', // Realizar 1 pagamento sem assinatura ou criação de conta, ira somente pegar os dados do cartao
-    line_items: [ // Array com varias informações sobre qauis produtos vão ser comprados
-    // Aqui se tem duas formas, passando o nome do produto do zero, sendo valido quando esses produtos não existem no stripe
-    //ou passar price => ID do preço
+    mode: 'payment',
+    line_items: products.map((product) => ({
+      price: product.defaultPriceId,
+      quantity: 1
+    }))
+    /*
+    Antes
+    [
       {
-        price: priceId, // Identifica o produto que ira ser comprado
+        price: priceId,
         quantity: 1
       }
     ]
-  })
+    */
+  });
 
   return response.status(201).json({
-    checkoutUrl: checkoutSession.url // Url para redirecionar o usuário,onde ele ira finalizar sua compra
+    checkoutUrl: checkoutSession.url
   })
 }
